@@ -1,0 +1,6 @@
+@Fundoo.Notification.Api_HostAddress = http://localhost:5287
+
+GET {{Fundoo.Notification.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

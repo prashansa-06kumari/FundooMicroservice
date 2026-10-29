@@ -1,0 +1,92 @@
+## ===== Build output =====
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Ll]og/
+[Ll]ogs/
+publish/
+PublishScripts/
+artifacts/
+
+## ===== Visual Studio =====
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.rsuser
+*.vsidx
+*.VC.db
+*.VC.VC.opendb
+*.sdf
+*.opensdf
+*.ncb
+.vscode/
+.idea/
+*.DotSettings.user
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+## ===== Test results & coverage =====
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+TestResults/
+.nunit/
+*.VisualState.xml
+TestResult.xml
+nunit-*.xml
+
+## ===== NuGet =====
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## ===== Secrets & local config (NEVER commit these) =====
+secrets.json
+appsettings.Local.json
+appsettings.*.Local.json
+*.env
+.env
+.env.*
+*.pfx
+*.p12
+*.key
+*.pem
+
+## ===== Logs & temp files =====
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+~$*
+
+## ===== OS files =====
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+## ===== Misc =====
+.dotnet/
+.nuget/
+*.publishsettings
+node_modules/

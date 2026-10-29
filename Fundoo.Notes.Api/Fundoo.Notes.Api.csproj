@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>8797172b-cd59-4514-9017-9f9ca57d32ec</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.33" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Fundoo.Notes.Application\Fundoo.Notes.Application.csproj" />
+		<ProjectReference Include="..\Fundoo.Notes.Infrastructure\Fundoo.Notes.Infrastructure.csproj" />
+	</ItemGroup>
+
+</Project>

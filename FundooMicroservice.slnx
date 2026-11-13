@@ -10,6 +10,9 @@
     <Project Path="Fundoo.Notes.Domain/Fundoo.Notes.Domain.csproj" />
     <Project Path="Fundoo.Notes.Infrastructure/Fundoo.Notes.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Notes/Configuration/">
+    <File Path="ConfigureSwaggerOptions.cs" />
+  </Folder>
   <Folder Name="/src/Services/Notification/">
     <Project Path="Fundoo.Notification.Api/Fundoo.Notification.Api.csproj" />
     <Project Path="Fundoo.Notification.Application/Fundoo.Notification.Application.csproj" />

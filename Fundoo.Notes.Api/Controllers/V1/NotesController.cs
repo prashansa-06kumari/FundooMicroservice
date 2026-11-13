@@ -1,14 +1,19 @@
-﻿using Fundoo.Notes.Api.Contracts;
+﻿using Asp.Versioning;                                  // NEW
+using Fundoo.Notes.Api.Contracts;
 using Fundoo.Notes.Application.Abstractions;
 using Fundoo.Notes.Application.Notes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
-namespace Fundoo.Notes.Api.Controllers;
+namespace Fundoo.Notes.Api.Controllers.V1;
 
 [ApiController]
+[ApiVersion("1.0")]                                    // NEW
 [Authorize]
-[Route("api/notes")]
+[EnableRateLimiting("notes")]
+[Route("api/v{version:apiVersion}/notes")]             // NEW (versioned URL)
+[Route("api/notes")]                                   // your existing route, kept for old clients
 public class NotesController(INoteService notes) : ControllerBase
 {
     // userId ONLY from the validated token, never from request body/query/route

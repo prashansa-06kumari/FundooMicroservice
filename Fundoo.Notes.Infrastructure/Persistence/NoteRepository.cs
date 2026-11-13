@@ -2,32 +2,47 @@
 using Fundoo.Notes.Domain.Entities;
 using Npgsql;
 using NpgsqlTypes;
+using Polly;
+using Polly.Registry;
 
 namespace Fundoo.Notes.Infrastructure.Persistence;
 
-public class NoteRepository(NpgsqlDataSource dataSource) : INoteRepository
+public class NoteRepository(
+    NpgsqlDataSource dataSource,
+    ResiliencePipelineProvider<string> pipelines) : INoteRepository
 {
+    private const int CommandTimeoutSeconds = 7;
+
     private const string NoteColumns =
         "n.id, n.user_id, n.title, n.content, n.color, n.is_pinned, n.is_archived, n.is_trashed, n.created_at_utc, n.updated_at_utc";
 
+    // SELECT aur idempotent writes: retry + jitter allowed
+    private readonly ResiliencePipeline _read = pipelines.GetPipeline("db-read");
+    // INSERT: retry nahi (duplicate se bachne ke liye)
+    private readonly ResiliencePipeline _write = pipelines.GetPipeline("db-write");
+
     public async Task<Note?> GetOwnedAsync(Guid userId, Guid id, CancellationToken ct = default)
     {
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-
-        var notes = new List<Note>();
-        await using (var cmd = new NpgsqlCommand(
-            $"SELECT {NoteColumns} FROM notes n WHERE n.id = @id AND n.user_id = @userId", conn))
+        return await _read.ExecuteAsync<Note?>(async token =>
         {
-            cmd.Parameters.AddWithValue("id", id);
-            cmd.Parameters.AddWithValue("userId", userId);
+            await using var conn = await dataSource.OpenConnectionAsync(token);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                notes.Add(ReadNote(reader));
-        }
+            var notes = new List<Note>();
+            await using (var cmd = new NpgsqlCommand(
+                $"SELECT {NoteColumns} FROM notes n WHERE n.id = @id AND n.user_id = @userId", conn))
+            {
+                cmd.CommandTimeout = CommandTimeoutSeconds;
+                cmd.Parameters.AddWithValue("id", id);
+                cmd.Parameters.AddWithValue("userId", userId);
 
-        await LoadLabelsAsync(conn, notes, ct);
-        return notes.FirstOrDefault();
+                await using var reader = await cmd.ExecuteReaderAsync(token);
+                while (await reader.ReadAsync(token))
+                    notes.Add(ReadNote(reader));
+            }
+
+            await LoadLabelsAsync(conn, notes, token);
+            return notes.FirstOrDefault();
+        }, ct);
     }
 
     public async Task<List<Note>> ListAsync(Guid userId, NoteView view, CancellationToken ct = default)
@@ -48,20 +63,24 @@ public class NoteRepository(NpgsqlDataSource dataSource) : INoteRepository
             ORDER BY n.is_pinned DESC, n.updated_at_utc DESC
             """;
 
-        await using var conn = await dataSource.OpenConnectionAsync(ct);
-
-        var notes = new List<Note>();
-        await using (var cmd = new NpgsqlCommand(sql, conn))
+        return await _read.ExecuteAsync(async token =>
         {
-            cmd.Parameters.AddWithValue("userId", userId);
+            await using var conn = await dataSource.OpenConnectionAsync(token);
 
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                notes.Add(ReadNote(reader));
-        }
+            var notes = new List<Note>();
+            await using (var cmd = new NpgsqlCommand(sql, conn))
+            {
+                cmd.CommandTimeout = CommandTimeoutSeconds;
+                cmd.Parameters.AddWithValue("userId", userId);
 
-        await LoadLabelsAsync(conn, notes, ct);
-        return notes;
+                await using var reader = await cmd.ExecuteReaderAsync(token);
+                while (await reader.ReadAsync(token))
+                    notes.Add(ReadNote(reader));
+            }
+
+            await LoadLabelsAsync(conn, notes, token);
+            return notes;
+        }, ct);
     }
 
     public async Task AddAsync(Note note, CancellationToken ct = default)
@@ -71,11 +90,15 @@ public class NoteRepository(NpgsqlDataSource dataSource) : INoteRepository
             VALUES (@id, @userId, @title, @content, @color, @isPinned, @isArchived, @isTrashed, @createdAt, @updatedAt)
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        AddNoteParameters(cmd, note);
-        cmd.Parameters.AddWithValue("createdAt", note.CreatedAtUtc);
-        cmd.Parameters.AddWithValue("updatedAt", note.UpdatedAtUtc);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await _write.ExecuteAsync(async token =>
+        {
+            await using var cmd = dataSource.CreateCommand(sql);
+            cmd.CommandTimeout = CommandTimeoutSeconds;
+            AddNoteParameters(cmd, note);
+            cmd.Parameters.AddWithValue("createdAt", note.CreatedAtUtc);
+            cmd.Parameters.AddWithValue("updatedAt", note.UpdatedAtUtc);
+            await cmd.ExecuteNonQueryAsync(token);
+        }, ct);
     }
 
     public async Task UpdateAsync(Note note, CancellationToken ct = default)
@@ -88,19 +111,28 @@ public class NoteRepository(NpgsqlDataSource dataSource) : INoteRepository
             WHERE id = @id AND user_id = @userId
             """;
 
-        await using var cmd = dataSource.CreateCommand(sql);
-        AddNoteParameters(cmd, note);
-        cmd.Parameters.AddWithValue("updatedAt", note.UpdatedAtUtc);
-        await cmd.ExecuteNonQueryAsync(ct);
+        // SET absolute values hain, to dobara chalane par safe (idempotent)
+        await _read.ExecuteAsync(async token =>
+        {
+            await using var cmd = dataSource.CreateCommand(sql);
+            cmd.CommandTimeout = CommandTimeoutSeconds;
+            AddNoteParameters(cmd, note);
+            cmd.Parameters.AddWithValue("updatedAt", note.UpdatedAtUtc);
+            await cmd.ExecuteNonQueryAsync(token);
+        }, ct);
     }
 
     public async Task DeleteAsync(Note note, CancellationToken ct = default)
     {
-        await using var cmd = dataSource.CreateCommand(
-            "DELETE FROM notes WHERE id = @id AND user_id = @userId");
-        cmd.Parameters.AddWithValue("id", note.Id);
-        cmd.Parameters.AddWithValue("userId", note.UserId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await _read.ExecuteAsync(async token =>
+        {
+            await using var cmd = dataSource.CreateCommand(
+                "DELETE FROM notes WHERE id = @id AND user_id = @userId");
+            cmd.CommandTimeout = CommandTimeoutSeconds;
+            cmd.Parameters.AddWithValue("id", note.Id);
+            cmd.Parameters.AddWithValue("userId", note.UserId);
+            await cmd.ExecuteNonQueryAsync(token);
+        }, ct);
     }
 
     private static void AddNoteParameters(NpgsqlCommand cmd, Note n)
@@ -146,6 +178,7 @@ public class NoteRepository(NpgsqlDataSource dataSource) : INoteRepository
             WHERE nl.note_id = ANY(@noteIds)
             ORDER BY l.name
             """, conn);
+        cmd.CommandTimeout = CommandTimeoutSeconds;
         cmd.Parameters.AddWithValue("noteIds", byId.Keys.ToArray());
 
         await using var reader = await cmd.ExecuteReaderAsync(ct);

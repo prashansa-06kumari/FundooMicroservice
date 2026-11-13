@@ -26,6 +26,25 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
+// Polly ke timeout / open-circuit errors par 500 ki jagah saaf 503/504
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Polly.CircuitBreaker.BrokenCircuitException)
+    {
+        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await context.Response.WriteAsync("Service temporarily unavailable.");
+    }
+    catch (Polly.Timeout.TimeoutRejectedException)
+    {
+        context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+        await context.Response.WriteAsync("The operation timed out.");
+    }
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

@@ -23,10 +23,12 @@ public class NotificationApiEmailNotifier(HttpClient http, ILogger<NotificationA
             else
                 logger.LogWarning("Notification service returned {StatusCode} for a password reset email", (int)response.StatusCode);
         }
-        catch (Exception ex) when ((ex is HttpRequestException || ex is TaskCanceledException) && !ct.IsCancellationRequested)
+        catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // Token/email log nahi karte. Notification service down ho to bhi API ka jawab same rehta hai.
-            logger.LogWarning(ex, "Notification service could not be reached");
+            // Polly ke timeout (TimeoutRejectedException) aur open circuit (BrokenCircuitException)
+            // bhi yahin pakde jaate hain. Token/email log nahi karte.
+            // Notification service down ho to bhi API ka jawab same rehta hai.
+            logger.LogWarning(ex, "Notification service unavailable");
         }
     }
 }

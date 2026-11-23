@@ -1,0 +1,658 @@
+{
+  "info": {
+    "name": "Fundoo Notes Microservices",
+    "description": "Complete collection for Fundoo User, Notes, and Notification APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "userUrl",
+      "value": "https://localhost:7170",
+      "type": "string"
+    },
+    {
+      "key": "notesUrl",
+      "value": "https://localhost:7256",
+      "type": "string"
+    },
+    {
+      "key": "gatewayUrl",
+      "value": "https://localhost:7048",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "noteId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "labelId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Auth & User API",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Prashansa Kumari\",\n  \"email\": \"prashansaku60@gmail.com\",\n  \"password\": \"Password@123\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/register",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login (Auto-saves Token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.collectionVariables.set('token', json.accessToken);",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"prashansaku60@gmail.com\",\n  \"password\": \"Password@123\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/login",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Google Login (OAuth / SSO)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.collectionVariables.set('token', json.accessToken);",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"Google\",\n  \"email\": \"prashansaku60@gmail.com\",\n  \"fullName\": \"Prashansa Google\",\n  \"providerKey\": \"google-uid-12345\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/google-login",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "google-login"]
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"prashansaku60@gmail.com\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/forgot-password",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"prashansaku60@gmail.com\",\n  \"token\": \"PASTE_TOKEN_FROM_EMAIL_HERE\",\n  \"newPassword\": \"NewPassword@123\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/reset-password",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "reset-password"]
+            }
+          }
+        },
+        {
+          "name": "Toggle 2FA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enable\": true\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/toggle-2fa",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "toggle-2fa"]
+            }
+          }
+        },
+        {
+          "name": "Verify 2FA",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.collectionVariables.set('token', json.accessToken);",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"prashansaku60@gmail.com\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/verify-2fa",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "verify-2fa"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.accessToken) {",
+                  "        pm.collectionVariables.set('token', json.accessToken);",
+                  "    }",
+                  "    if (json.refreshToken) {",
+                  "        pm.collectionVariables.set('refreshToken', json.refreshToken);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/refresh-token",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "refresh-token"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/sessions",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "sessions"]
+            }
+          }
+        },
+        {
+          "name": "Revoke All Sessions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{userUrl}}/api/auth/revoke-all-sessions",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "revoke-all-sessions"]
+            }
+          }
+        },
+        {
+          "name": "Logout Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{userUrl}}/api/auth/logout",
+              "host": ["{{userUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Notes API",
+      "item": [
+        {
+          "name": "Create Note",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.id) {",
+                  "        pm.collectionVariables.set('noteId', json.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My First Fundoo Note\",\n  \"content\": \"This is note content testing in Postman!\",\n  \"color\": \"#ffffff\"\n}"
+            },
+            "url": {
+              "raw": "{{notesUrl}}/api/notes",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes"]
+            }
+          }
+        },
+        {
+          "name": "Get All Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes"]
+            }
+          }
+        },
+        {
+          "name": "Get Note By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/{{noteId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "{{noteId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Note Title\",\n  \"content\": \"Updated content.\",\n  \"color\": \"#ffe082\",\n  \"isPinned\": true\n}"
+            },
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/{{noteId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "{{noteId}}"]
+            }
+          }
+        },
+        {
+          "name": "Archive Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/{{noteId}}/archive",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "{{noteId}}", "archive"]
+            }
+          }
+        },
+        {
+          "name": "Unarchive Note",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/{{noteId}}/unarchive",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "{{noteId}}", "unarchive"]
+            }
+          }
+        },
+        {
+          "name": "Get Archived Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/archived",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "archived"]
+            }
+          }
+        },
+        {
+          "name": "Get Trash Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/trash",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "trash"]
+            }
+          }
+        },
+        {
+          "name": "Delete Note",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/notes/{{noteId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "notes", "{{noteId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Labels API",
+      "item": [
+        {
+          "name": "Create Label",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var json = pm.response.json();",
+                  "    if (json.id) {",
+                  "        pm.collectionVariables.set('labelId', json.id);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Personal\"\n}"
+            },
+            "url": {
+              "raw": "{{notesUrl}}/api/labels",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "labels"]
+            }
+          }
+        },
+        {
+          "name": "Get All Labels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/labels",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "labels"]
+            }
+          }
+        },
+        {
+          "name": "Add Label To Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/labels/{{labelId}}/notes/{{noteId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "labels", "{{labelId}}", "notes", "{{noteId}}"]
+            }
+          }
+        },
+        {
+          "name": "Remove Label From Note",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/labels/{{labelId}}/notes/{{noteId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "labels", "{{labelId}}", "notes", "{{noteId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Label",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{notesUrl}}/api/labels/{{labelId}}",
+              "host": ["{{notesUrl}}"],
+              "path": ["api", "labels", "{{labelId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

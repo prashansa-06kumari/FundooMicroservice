@@ -2,7 +2,9 @@
 using System.Net.Sockets;
 using Fundoo.Notification.Application.Abstractions;
 using Fundoo.Notification.Application.Emails;
+using Fundoo.Notification.Infrastructure.Data;
 using Fundoo.Notification.Infrastructure.Email;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
@@ -13,8 +15,6 @@ namespace Fundoo.Notification.Infrastructure;
 
 public static class DependencyInjection
 {
-    // Sirf temporary SMTP errors par retry / breaker.
-    // Galat password ya galat address par retry bekaar hai.
     private static bool IsTransientSmtp(Exception ex) =>
         ex is SocketException or IOException or TimeoutException
         || (ex is SmtpException e &&
@@ -25,6 +25,13 @@ public static class DependencyInjection
 
     public static IServiceCollection AddNotificationInfrastructure(this IServiceCollection services, IConfiguration config)
     {
+        var connectionString = config.GetConnectionString("NotificationDb") 
+            ?? config.GetConnectionString("DefaultConnection")
+            ?? "Host=localhost;Port=5432;Database=FundooNotificationDb;Username=postgres;Password=admin123";
+
+        services.AddDbContext<NotificationDbContext>(options =>
+            options.UseNpgsql(connectionString));
+
         services.AddOptions<SmtpOptions>()
             .Bind(config.GetSection("Smtp"))
             .Validate(o => !string.IsNullOrWhiteSpace(o.Host) && !string.IsNullOrWhiteSpace(o.FromAddress),

@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/ApiGateway/">
+    <Project Path="WebApplication1/Fundoo.ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/" />
+  <Folder Name="/src/Services/Notes/">
+    <Project Path="Fundoo.Notes.Api/Fundoo.Notes.Api.csproj" />
+    <Project Path="Fundoo.Notes.Application/Fundoo.Notes.Application.csproj" Id="e804bd25-c8af-44a4-a322-2aa3c8214c22" />
+    <Project Path="Fundoo.Notes.Domain/Fundoo.Notes.Domain.csproj" Id="f3bfa510-3245-4789-824c-554383c7c101" />
+    <Project Path="Fundoo.Notes.Infrastructure/Fundoo.Notes.Infrastructure.csproj" Id="df60f850-58ba-4188-b46e-91c832c6cb91" />
+  </Folder>
+  <Folder Name="/src/Services/User/">
+    <Project Path="Fundoo.User.Api/Fundoo.User.Api.csproj" />
+    <Project Path="Fundoo.User.Application/Fundoo.User.Application.csproj" />
+    <Project Path="Fundoo.User.Domain/Fundoo.User.Domain.csproj" />
+    <Project Path="Fundoo.User.Infrastructure/Fundoo.User.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/Services/Notification/">
+    <Project Path="Fundoo.Notification.Api/Fundoo.Notification.Api.csproj" />
+    <Project Path="Fundoo.Notification.Application/Fundoo.Notification.Application.csproj" />
+    <Project Path="Fundoo.Notification.Domain/Fundoo.Notification.Domain.csproj" />
+    <Project Path="Fundoo.Notification.Infrastructure/Fundoo.Notification.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="Fundoo.Notification.UnitTests/Fundoo.Notification.UnitTests.csproj" />
+  </Folder>
+</Solution>

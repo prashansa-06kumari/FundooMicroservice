@@ -1,175 +1,170 @@
 using System.Text;
-using System.Threading.RateLimiting;
-using Asp.Versioning;
-using Asp.Versioning.ApiExplorer;
-using Fundoo.Notes.Api.Messaging;                              // NEW (Kafka)
-using Fundoo.Notes.Infrastructure;
+using FluentValidation;
+using FluentValidation.AspNetCore;
+using Fundoo.Notes.Api.Middleware;
+using Fundoo.Notes.Api.Validators;
+using Fundoo.Notes.Application.Interfaces;
+using Fundoo.Notes.Infrastructure.Data;
+using Fundoo.Notes.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using NLog.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var jwt = builder.Configuration.GetSection("Jwt");
-var signingKey = jwt["SigningKey"];
-if (string.IsNullOrWhiteSpace(signingKey) || signingKey.Length < 32)
-    throw new InvalidOperationException("Jwt:SigningKey must be at least 32 characters.");
+// Configure NLog
+builder.Logging.ClearProviders();
+builder.Host.UseNLog();
 
-builder.Services.AddNotesInfrastructure(builder.Configuration);
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o =>
-    {
-        o.MapInboundClaims = false;   // keep the claim name "sub"
-        o.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = jwt["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwt["Audience"],
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(signingKey)),
-            ClockSkew = TimeSpan.FromMinutes(1)
-        };
-    });
-builder.Services.AddAuthorization();
-
-// Incoming concurrency limits (bulkhead): Notes aur Labels ke alag pools
-builder.Services.AddRateLimiter(o =>
-{
-    o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-    o.AddConcurrencyLimiter("notes", opt =>
-    {
-        opt.PermitLimit = 20;
-        opt.QueueLimit = 10;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-    });
-
-    o.AddConcurrencyLimiter("labels", opt =>
-    {
-        opt.PermitLimit = 10;
-        opt.QueueLimit = 5;
-        opt.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-    });
-});
-
+// Controllers and FluentValidation
 builder.Services.AddControllers();
-
-// NEW (Kafka): background consumer that creates default labels when a user registers
-builder.Services.AddHostedService<UserRegisteredConsumer>();
-
-// ===== NEW: API versioning =====
-builder.Services
-    .AddApiVersioning(options =>
-    {
-        options.DefaultApiVersion = new ApiVersion(1, 0);
-        options.AssumeDefaultVersionWhenUnspecified = true;   // old /api/notes URLs keep working
-        options.ReportApiVersions = true;                     // api-supported-versions header
-        options.ApiVersionReader = new UrlSegmentApiVersionReader();
-    })
-    .AddMvc()
-    .AddApiExplorer(options =>
-    {
-        options.GroupNameFormat = "'v'VVV";                   // v1, v2
-        options.SubstituteApiVersionInUrl = true;             // Swagger shows /api/v1/... not {version}
-    });
-
-// NEW: creates one Swagger document per API version (no separate file needed)
-builder.Services.AddOptions<SwaggerGenOptions>()
-    .Configure<IApiVersionDescriptionProvider>((options, provider) =>
-    {
-        foreach (var description in provider.ApiVersionDescriptions)
-        {
-            options.SwaggerDoc(description.GroupName, new OpenApiInfo
-            {
-                Title = "Fundoo Notes API",
-                Version = description.ApiVersion.ToString(),
-                Description = description.IsDeprecated
-                    ? "This API version is deprecated."
-                    : null
-            });
-        }
-    });
-// ===== END NEW =====
+builder.Services.AddFluentValidationAutoValidation();
+builder.Services.AddValidatorsFromAssemblyContaining<CreateNoteRequestValidator>();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+builder.Services.AddSwaggerGen(options =>
 {
-    c.CustomSchemaIds(type => type.FullName);   // NEW: avoids clashes when V1 and V2 have same class names
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Fundoo Notes API", Version = "v1" });
 
-    // Adds the "Authorize" button in Swagger so you can paste the token
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
+        Description = "JWT Authorization header using the Bearer scheme. Enter your token directly.",
+        In = ParameterLocation.Header,
         Type = SecuritySchemeType.Http,
         Scheme = "bearer",
-        BearerFormat = "JWT",
-        In = ParameterLocation.Header
+        BearerFormat = "JWT"
     });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
-            new OpenApiSecurityScheme { Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" } },
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
             Array.Empty<string>()
         }
     });
 });
 
+// HttpClient
+builder.Services.AddHttpClient();
+
+// Database connection
+var connectionString =
+    builder.Configuration.GetConnectionString("NotesDb")
+    ?? throw new InvalidOperationException(
+        "ConnectionStrings:NotesDb is missing from configuration.");
+
+builder.Services.AddSingleton(
+    new NotesConnectionFactory(connectionString));
+
+// Repositories
+builder.Services.AddScoped<INoteRepository, NoteRepository>();
+builder.Services.AddScoped<ILabelRepository, LabelRepository>();
+
+// JWT configuration
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key is missing.");
+
+var issuer = builder.Configuration["Jwt:Issuer"]
+    ?? throw new InvalidOperationException("Jwt:Issuer is missing.");
+
+var audience = builder.Configuration["Jwt:Audience"]
+    ?? throw new InvalidOperationException("Jwt:Audience is missing.");
+
+if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key must contain at least 32 bytes.");
+}
+
+// JWT Authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrEmpty(authHeader))
+                {
+                    if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                    }
+                    else
+                    {
+                        context.Token = authHeader.Trim();
+                    }
+                }
+                return Task.CompletedTask;
+            }
+        };
+
+        options.TokenValidationParameters =
+            new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = issuer,
+
+                ValidateAudience = true,
+                ValidAudience = audience,
+
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(jwtKey)),
+
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromMinutes(1)
+            };
+    });
+
+// Authorization
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
-// Polly ke timeout / open-circuit / bulkhead errors par 500 ki jagah saaf 503/504
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Polly.CircuitBreaker.BrokenCircuitException)
-    {
-        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsync("Service temporarily unavailable.");
-    }
-    catch (Polly.Timeout.TimeoutRejectedException)
-    {
-        context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
-        await context.Response.WriteAsync("The operation timed out.");
-    }
-    catch (Polly.RateLimiting.RateLimiterRejectedException)
-    {
-        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsync("Service is busy.");
-    }
-});
+// Global Exception Handling Middleware
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
+// Swagger UI configuration
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI(options =>   // NEW: options added so each version shows in the dropdown
+
+    app.UseSwaggerUI(options =>
     {
-        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
+        options.SwaggerEndpoint(
+            "/swagger/v1/swagger.json",
+            "Fundoo Notes API v1");
 
-        foreach (var description in provider.ApiVersionDescriptions)
-        {
-            options.SwaggerEndpoint(
-                $"/swagger/{description.GroupName}/swagger.json",
-                $"Fundoo Notes API {description.GroupName.ToUpperInvariant()}");
-        }
-
-        options.EnablePersistAuthorization();   // NEW: token page reload / V1-V2 switch par bhi yaad rahega
+        options.RoutePrefix = "swagger";
     });
 }
 
+// Health check endpoint
+app.MapGet("/health", () => Results.Ok(new
+{
+    service = "Fundoo.Notes.Api",
+    status = "Healthy"
+}));
+
+// Middleware
 app.UseHttpsRedirection();
-app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Map controllers
 app.MapControllers();
-app.MapGet("/health", () => Results.Ok("Healthy"));
 
 app.Run();

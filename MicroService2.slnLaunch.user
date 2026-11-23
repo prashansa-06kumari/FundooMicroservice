@@ -1,0 +1,23 @@
+[
+  {
+    "Name": "New Profile",
+    "Projects": [
+      {
+        "Path": "WebApplication1\\Fundoo.ApiGateway.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Fundoo.Notes.Api\\Fundoo.Notes.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Fundoo.Notification.Api\\Fundoo.Notification.Api.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Fundoo.User.Api\\Fundoo.User.Api.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

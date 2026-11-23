@@ -1,10 +1,24 @@
-using Fundoo.Notification.Infrastructure;
+using Fundoo.Notification.Api.Middleware;
 using Fundoo.Notification.Api.Security;
+using Fundoo.Notification.Api.Services;
+using Fundoo.Notification.Infrastructure;
 using Microsoft.OpenApi.Models;
+using NLog.Web;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure NLog
+builder.Logging.ClearProviders();
+builder.Host.UseNLog();
+
 builder.Services.AddNotificationInfrastructure(builder.Configuration);
+
+// Add HttpClient
+builder.Services.AddHttpClient();
+
+// Add Kafka Consumer BackgroundService
+builder.Services.AddHostedService<KafkaNotificationConsumer>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -26,24 +40,8 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-// Polly ke timeout / open-circuit errors par 500 ki jagah saaf 503/504
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Polly.CircuitBreaker.BrokenCircuitException)
-    {
-        context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-        await context.Response.WriteAsync("Service temporarily unavailable.");
-    }
-    catch (Polly.Timeout.TimeoutRejectedException)
-    {
-        context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
-        await context.Response.WriteAsync("The operation timed out.");
-    }
-});
+// Global Exception Handling Middleware
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

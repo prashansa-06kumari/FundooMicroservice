@@ -1,6 +1,7 @@
 ﻿using System.Net.Mail;
 using Fundoo.Notification.Application.Abstractions;
 using Fundoo.Notification.Domain.Entities;
+
 namespace Fundoo.Notification.Application.Emails;
 
 public enum SendEmailResult { Sent, InvalidRecipient, InvalidContent, DeliveryFailed }
@@ -22,6 +23,9 @@ public class NotificationService(IEmailSender sender) : INotificationService
             await sender.SendAsync(new EmailMessage { To = to, Subject = subject, Body = body, IsHtml = isHtml }, ct);
             return SendEmailResult.Sent;
         }
-        catch (EmailDeliveryException) { return SendEmailResult.DeliveryFailed; }
+        catch (EmailDeliveryException)
+        {
+            return SendEmailResult.DeliveryFailed;
+        }
     }
 }

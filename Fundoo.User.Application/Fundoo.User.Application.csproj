@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Fundoo.Notes.Domain\Fundoo.Notes.Domain.csproj" />
     <ProjectReference Include="..\Fundoo.User.Domain\Fundoo.User.Domain.csproj" />
   </ItemGroup>
 

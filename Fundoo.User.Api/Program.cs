@@ -184,11 +184,26 @@ catch (Exception ex)
 // Global Exception Handling Middleware
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// Enable Swagger in all environments (Local and Deployed)
+app.UseSwagger();
+app.UseSwaggerUI();
+
+// Route rewrite: Forward /api/auth and /api/users to /api/v1/auth seamlessly
+app.Use(async (context, next) =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    var path = context.Request.Path.Value ?? "";
+    if (path.StartsWith("/api/auth", StringComparison.OrdinalIgnoreCase) &&
+        !path.StartsWith("/api/v1/auth", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = "/api/v1/auth" + path.Substring("/api/auth".Length);
+    }
+    else if (path.StartsWith("/api/users", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = "/api/v1/auth" + path.Substring("/api/users".Length);
+    }
+
+    await next();
+});
 
 app.MapGet("/health", () => Results.Ok(new
 {

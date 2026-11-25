@@ -14,7 +14,8 @@ using Microsoft.IdentityModel.Tokens;
 namespace Fundoo.User.Api.Controllers;
 
 [ApiController]
-[Route("api/auth")]
+[Tags("Auth")]
+[Route("api/v1/auth")]
 public class UsersController : ControllerBase
 {
     private readonly IUserRepository _repository;
@@ -44,6 +45,12 @@ public class UsersController : ControllerBase
                     ?? User.FindFirstValue("userId");
 
         return Guid.TryParse(value, out var id) ? id : null;
+    }
+
+    private string? CurrentUserEmail()
+    {
+        return User.FindFirstValue(ClaimTypes.Email)
+               ?? User.FindFirstValue("email");
     }
 
     [HttpPost("register")]
@@ -144,20 +151,190 @@ public class UsersController : ControllerBase
             });
             await _kafkaProducer.ProduceAsync("user-events", user.Id.ToString(), twoFactorEvent);
 
-            // Direct email fallback
+            // Direct real email delivery
             await _emailService.SendEmailAsync(
                 user.Email,
-                "Fundoo Notes - Two-Factor Authentication Code",
-                $"Hello {user.FullName},\n\nYour 2FA verification code is: {code}\nThis code will expire in 10 minutes.");
+                "Fundoo Notes - Two-Factor Authentication Login Code",
+                $"Hello {user.FullName},\n\nYour 2FA login verification code (OTP) is: {code}\nThis code will expire in 10 minutes.\n\nPlease enter this OTP in /api/v1/auth/login/2fa to complete your login.");
 
             return Ok(new
             {
+                requires2fa = true,
                 requiresTwoFactor = true,
-                message = "Two-factor verification code has been sent to your email."
+                email = user.Email,
+                message = "Two-factor verification code (OTP) has been sent to your email. Please verify using /api/v1/auth/login/2fa."
             });
         }
 
         return await GenerateAuthResponseAsync(user);
+    }
+
+    [HttpPost("login/2fa")]
+    [HttpPost("verify-2fa")]
+    public async Task<IActionResult> TwoFactorLogin(
+        [FromBody] TwoFactorLoginRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await _repository.GetByEmailAsync(email);
+
+        if (user == null || !user.IsTwoFactorEnabled)
+        {
+            return Unauthorized(new { message = "Invalid request or 2FA not enabled for this user." });
+        }
+
+        if (string.IsNullOrWhiteSpace(user.TwoFactorCode) ||
+            user.TwoFactorCode != request.Code.Trim() ||
+            user.TwoFactorExpiryUtc < DateTime.UtcNow)
+        {
+            return Unauthorized(new { message = "Invalid or expired 2FA code." });
+        }
+
+        // Reset 2FA code after successful verification
+        user.TwoFactorCode = null;
+        user.TwoFactorExpiryUtc = null;
+        await _repository.UpdateUserAsync(user);
+
+        return await GenerateAuthResponseAsync(user);
+    }
+
+    [HttpPost("google")]
+    [HttpPost("google-login")]
+    public async Task<IActionResult> GoogleLogin(
+        [FromBody] GoogleLoginRequest request)
+    {
+        var email = request.Email.Trim().ToLowerInvariant();
+        var user = await _repository.GetByEmailAsync(email);
+
+        if (user == null)
+        {
+            // Auto-provision user for Google SSO
+            user = new UserEntity
+            {
+                Id = Guid.NewGuid(),
+                FullName = string.IsNullOrWhiteSpace(request.FullName) ? email.Split('@')[0] : request.FullName.Trim(),
+                Email = email,
+                AuthProvider = "Google",
+                ExternalProviderId = request.GoogleId,
+                PasswordHash = "OAUTH_EXTERNAL_LOGIN",
+                CreatedAt = DateTime.UtcNow
+            };
+            await _repository.CreateAsync(user);
+        }
+
+        return await GenerateAuthResponseAsync(user);
+    }
+
+    [HttpPost("2fa/setup")]
+    public async Task<IActionResult> SetupTwoFactor(
+        [FromBody] TwoFactorSetupRequest? request)
+    {
+        var email = request?.Email?.Trim().ToLowerInvariant() ?? CurrentUserEmail();
+        var userId = CurrentUserId();
+
+        UserEntity? user = null;
+        if (userId != null)
+        {
+            user = await _repository.GetByIdAsync(userId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(email))
+        {
+            user = await _repository.GetByEmailAsync(email);
+        }
+
+        if (user == null)
+        {
+            return BadRequest(new { message = "User not found. Provide email or authenticate with Bearer token." });
+        }
+
+        var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
+        user.TwoFactorCode = code;
+        user.TwoFactorExpiryUtc = DateTime.UtcNow.AddMinutes(10);
+        await _repository.UpdateUserAsync(user);
+
+        // Send OTP via Email
+        await _emailService.SendEmailAsync(
+            user.Email,
+            "Fundoo Notes - Two-Factor Authentication Setup OTP",
+            $"Hello {user.FullName},\n\nYour OTP to set up Two-Factor Authentication is: {code}\nThis code is valid for 10 minutes.\n\nPlease enter this code in /api/v1/auth/2fa/enable to activate 2FA.");
+
+        return Ok(new
+        {
+            message = "Two-factor setup OTP has been sent to your registered email.",
+            email = user.Email
+        });
+    }
+
+    [HttpPost("2fa/enable")]
+    public async Task<IActionResult> EnableTwoFactor(
+        [FromBody] TwoFactorEnableRequest request)
+    {
+        var email = request.Email?.Trim().ToLowerInvariant() ?? CurrentUserEmail();
+        var userId = CurrentUserId();
+
+        UserEntity? user = null;
+        if (userId != null)
+        {
+            user = await _repository.GetByIdAsync(userId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(email))
+        {
+            user = await _repository.GetByEmailAsync(email);
+        }
+
+        if (user == null)
+        {
+            return BadRequest(new { message = "User not found." });
+        }
+
+        if (string.IsNullOrWhiteSpace(user.TwoFactorCode) ||
+            user.TwoFactorCode != request.Code.Trim() ||
+            user.TwoFactorExpiryUtc < DateTime.UtcNow)
+        {
+            return BadRequest(new { message = "Invalid or expired 2FA verification code." });
+        }
+
+        user.IsTwoFactorEnabled = true;
+        user.TwoFactorCode = null;
+        user.TwoFactorExpiryUtc = null;
+        await _repository.UpdateUserAsync(user);
+
+        return Ok(new
+        {
+            message = "Two-factor authentication has been enabled successfully!"
+        });
+    }
+
+    [HttpPost("2fa/disable")]
+    public async Task<IActionResult> DisableTwoFactor(
+        [FromBody] TwoFactorDisableRequest? request)
+    {
+        var email = request?.Email?.Trim().ToLowerInvariant() ?? CurrentUserEmail();
+        var userId = CurrentUserId();
+
+        UserEntity? user = null;
+        if (userId != null)
+        {
+            user = await _repository.GetByIdAsync(userId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(email))
+        {
+            user = await _repository.GetByEmailAsync(email);
+        }
+
+        if (user == null)
+        {
+            return BadRequest(new { message = "User not found." });
+        }
+
+        user.IsTwoFactorEnabled = false;
+        user.TwoFactorCode = null;
+        user.TwoFactorExpiryUtc = null;
+        await _repository.UpdateUserAsync(user);
+
+        return Ok(new
+        {
+            message = "Two-factor authentication has been disabled."
+        });
     }
 
     [HttpPost("forgot-password")]
@@ -239,75 +416,32 @@ public class UsersController : ControllerBase
         });
     }
 
-    [HttpPost("verify-2fa")]
-    public async Task<IActionResult> VerifyTwoFactor(
-        [FromBody] VerifyTwoFactorRequest request)
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout(
+        [FromBody] RefreshTokenRequest? request)
     {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var user = await _repository.GetByEmailAsync(email);
-
-        if (user == null || !user.IsTwoFactorEnabled)
+        if (request != null && !string.IsNullOrWhiteSpace(request.RefreshToken))
         {
-            return Unauthorized(new { message = "Invalid request or 2FA not enabled." });
+            var session = await _repository.GetSessionByRefreshTokenAsync(request.RefreshToken);
+            if (session != null && !session.IsRevoked)
+            {
+                session.IsRevoked = true;
+                await _repository.UpdateSessionAsync(session);
+            }
         }
-
-        if (user.TwoFactorCode != request.Code || user.TwoFactorExpiryUtc < DateTime.UtcNow)
+        else
         {
-            return Unauthorized(new { message = "Invalid or expired 2FA code." });
+            var userId = CurrentUserId();
+            if (userId != null)
+            {
+                await _repository.RevokeAllSessionsByUserIdAsync(userId.Value);
+            }
         }
-
-        // Reset 2FA code after successful verification
-        user.TwoFactorCode = null;
-        user.TwoFactorExpiryUtc = null;
-        await _repository.UpdateUserAsync(user);
-
-        return await GenerateAuthResponseAsync(user);
-    }
-
-    [Authorize]
-    [HttpPost("toggle-2fa")]
-    public async Task<IActionResult> ToggleTwoFactor(
-        [FromBody] ToggleTwoFactorRequest request)
-    {
-        var userId = CurrentUserId();
-        if (userId == null) return Unauthorized();
-
-        var user = await _repository.GetByIdAsync(userId.Value);
-        if (user == null) return NotFound();
-
-        user.IsTwoFactorEnabled = request.Enable;
-        await _repository.UpdateUserAsync(user);
 
         return Ok(new
         {
-            message = $"Two-factor authentication has been {(request.Enable ? "enabled" : "disabled")}."
+            message = "Logged out successfully (session ended)."
         });
-    }
-
-    [HttpPost("google-login")]
-    public async Task<IActionResult> ExternalLogin(
-        [FromBody] ExternalAuthRequest request)
-    {
-        var email = request.Email.Trim().ToLowerInvariant();
-        var user = await _repository.GetByEmailAsync(email);
-
-        if (user == null)
-        {
-            // Auto-provision user for OAuth / SSO
-            user = new UserEntity
-            {
-                Id = Guid.NewGuid(),
-                FullName = request.FullName.Trim(),
-                Email = email,
-                AuthProvider = request.Provider,
-                ExternalProviderId = request.ProviderKey,
-                PasswordHash = "OAUTH_EXTERNAL_LOGIN",
-                CreatedAt = DateTime.UtcNow
-            };
-            await _repository.CreateAsync(user);
-        }
-
-        return await GenerateAuthResponseAsync(user);
     }
 
     [HttpPost("refresh-token")]
@@ -361,23 +495,6 @@ public class UsersController : ControllerBase
             refreshToken = newRefreshToken,
             expiresInMinutes = expiryMinutes,
             expiresAtUtc = newSession.ExpiresAt
-        });
-    }
-
-    [HttpPost("logout")]
-    public async Task<IActionResult> Logout(
-        [FromBody] RefreshTokenRequest request)
-    {
-        var session = await _repository.GetSessionByRefreshTokenAsync(request.RefreshToken);
-        if (session != null && !session.IsRevoked)
-        {
-            session.IsRevoked = true;
-            await _repository.UpdateSessionAsync(session);
-        }
-
-        return Ok(new
-        {
-            message = "Logged out successfully (session ended)."
         });
     }
 

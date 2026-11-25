@@ -2,6 +2,39 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Fundoo.User.Api.Models;
 
+public class TwoFactorLoginRequest
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(6, MinimumLength = 6)]
+    public string Code { get; set; } = string.Empty;
+}
+
+public class TwoFactorSetupRequest
+{
+    [EmailAddress]
+    public string? Email { get; set; }
+}
+
+public class TwoFactorEnableRequest
+{
+    [EmailAddress]
+    public string? Email { get; set; }
+
+    [Required]
+    [StringLength(6, MinimumLength = 6)]
+    public string Code { get; set; } = string.Empty;
+}
+
+public class TwoFactorDisableRequest
+{
+    [EmailAddress]
+    public string? Email { get; set; }
+}
+
 public class VerifyTwoFactorRequest
 {
     [Required]

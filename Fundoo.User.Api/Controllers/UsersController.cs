@@ -274,22 +274,6 @@ public class UsersController : ControllerBase
             await _repository.CreateAsync(user);
         }
 
-            // Auto-provision user for Google SSO
-            user = new UserEntity
-            {
-                Id = Guid.NewGuid(),
-                FirstName = firstName,
-                LastName = lastName,
-                FullName = fullName,
-                Email = email,
-                AuthProvider = "Google",
-                ExternalProviderId = googleId,
-                PasswordHash = "OAUTH_GOOGLE_ACCOUNT",
-                CreatedAt = DateTime.UtcNow
-            };
-            await _repository.CreateAsync(user);
-        }
-
         return await GenerateAuthResponseAsync(user);
     }
 

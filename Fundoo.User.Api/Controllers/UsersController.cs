@@ -240,7 +240,12 @@ public class UsersController : ControllerBase
         {
             // Direct profile payload (convenient for local Swagger testing)
             email = request.Email.Trim().ToLowerInvariant();
-            fullName = string.IsNullOrWhiteSpace(request.FullName) ? email.Split('@')[0] : request.FullName.Trim();
+            var reqFirst = request.FirstName?.Trim() ?? "";
+            var reqLast = request.LastName?.Trim() ?? "";
+            fullName = !string.IsNullOrWhiteSpace(request.FullName)
+                ? request.FullName.Trim()
+                : $"{reqFirst} {reqLast}".Trim();
+            if (string.IsNullOrWhiteSpace(fullName)) fullName = email.Split('@')[0];
         }
         else
         {
@@ -255,8 +260,12 @@ public class UsersController : ControllerBase
         if (user == null)
         {
             var nameParts = fullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
-            var firstName = nameParts.Length > 0 ? nameParts[0] : fullName;
-            var lastName = nameParts.Length > 1 ? nameParts[1] : "";
+            var firstName = !string.IsNullOrWhiteSpace(request.FirstName)
+                ? request.FirstName.Trim()
+                : (nameParts.Length > 0 ? nameParts[0] : fullName);
+            var lastName = !string.IsNullOrWhiteSpace(request.LastName)
+                ? request.LastName.Trim()
+                : (nameParts.Length > 1 ? nameParts[1] : "");
 
             // Auto-provision user for Google SSO
             user = new UserEntity

@@ -3,23 +3,24 @@ namespace Fundoo.User.Api.Models;
 public class GoogleLoginRequest
 {
     /// <summary>
-    /// Google ID Token obtained from Google Sign-In (Google Cloud Console OAuth 2.0).
-    /// If provided, backend verifies it cryptographically with Google's servers.
+    /// Google ID Token from Google Cloud Console / Google Sign-In.
+    /// (Optional for direct testing; if provided, verified directly with Google).
     /// </summary>
     public string? IdToken { get; set; }
 
-    /// <summary>
-    /// User email address (auto-extracted from IdToken if IdToken is passed).
-    /// </summary>
+    public string? FirstName { get; set; }
+
+    public string? LastName { get; set; }
+
     public string? Email { get; set; }
 
     /// <summary>
-    /// User full name (auto-extracted from IdToken if IdToken is passed).
-    /// </summary>
-    public string? FullName { get; set; }
-
-    /// <summary>
-    /// Unique Google Subject ID (auto-extracted from IdToken if IdToken is passed).
+    /// Google unique user ID (Optional, e.g. "google_123456").
     /// </summary>
     public string? GoogleId { get; set; }
+
+    /// <summary>
+    /// Optional full name fallback.
+    /// </summary>
+    public string? FullName { get; set; }
 }

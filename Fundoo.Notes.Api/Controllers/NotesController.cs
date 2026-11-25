@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Fundoo.Notes.Api.Contracts;
 using Fundoo.Notes.Application.Interfaces;
+using Fundoo.Notes.Domain.Common;
 using Fundoo.Notes.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -59,13 +60,155 @@ public class NotesController : ControllerBase
             note);
     }
 
+    /// <summary>
+    /// Gets notes for the current user with pagination, keyword search, and label filtering.
+    /// Supports:
+    /// - Expectation 1: Manageable pagination batches (pageNumber, pageSize up to 100).
+    /// - Expectation 2 & 3: Finding notes by title or content.
+    /// - Expectation 4 & 5: Filtering by label and combined search.
+    /// - Expectation 6 & 7: Handling empty results, invalid page/size values, and large batches.
+    /// </summary>
     [HttpGet]
-    public async Task<IActionResult> GetAll(CancellationToken ct)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] NoteQueryRequest? queryParams,
+        CancellationToken ct)
     {
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
 
-        return Ok(await _notes.GetAllAsync(userId.Value, ct));
+        // Expectation 7: Validate navigation and batch size values
+        if (queryParams?.PageNumber.HasValue && queryParams.PageNumber.Value < 1)
+        {
+            return BadRequest(new
+            {
+                message = "Invalid page number. Page number must be 1 or greater."
+            });
+        }
+
+        if (queryParams?.PageSize.HasValue && queryParams.PageSize.Value < 1)
+        {
+            return BadRequest(new
+            {
+                message = "Invalid page size. Page size must be 1 or greater."
+            });
+        }
+
+        if (queryParams?.PageSize.HasValue && queryParams.PageSize.Value > 100)
+        {
+            return BadRequest(new
+            {
+                message = "Requested page size is unusually large. Maximum allowed page size is 100 notes per page."
+            });
+        }
+
+        var filter = new NoteFilterParams
+        {
+            PageNumber = queryParams?.PageNumber ?? 1,
+            PageSize = queryParams?.PageSize ?? 10,
+            Query = queryParams?.Query,
+            Title = queryParams?.Title,
+            Content = queryParams?.Content,
+            Label = queryParams?.Label,
+            LabelId = queryParams?.LabelId,
+            Color = queryParams?.Color,
+            IsArchived = queryParams?.IsArchived ?? false,
+            IsTrashed = queryParams?.IsTrashed ?? false
+        };
+
+        var result = await _notes.GetPagedAsync(userId.Value, filter, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Dedicated search endpoint across title, content, and labels with pagination.
+    /// Supports Expectations 2, 3, 5, 6, 7.
+    /// </summary>
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? query = null,
+        [FromQuery] string? title = null,
+        [FromQuery] string? content = null,
+        [FromQuery] string? label = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        var userId = CurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        if (pageNumber < 1)
+        {
+            return BadRequest(new { message = "Invalid page number. Page number must be 1 or greater." });
+        }
+
+        if (pageSize < 1)
+        {
+            return BadRequest(new { message = "Invalid page size. Page size must be 1 or greater." });
+        }
+
+        if (pageSize > 100)
+        {
+            return BadRequest(new { message = "Requested page size is unusually large. Maximum allowed page size is 100 notes per page." });
+        }
+
+        var filter = new NoteFilterParams
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            Query = query,
+            Title = title,
+            Content = content,
+            Label = label,
+            IsArchived = false,
+            IsTrashed = false
+        };
+
+        var result = await _notes.GetPagedAsync(userId.Value, filter, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Dedicated endpoint to browse notes associated with a specific label name.
+    /// Supports Expectations 4 and 5 (filtering by label and optional keyword search within that label).
+    /// </summary>
+    [HttpGet("by-label/{labelName}")]
+    public async Task<IActionResult> GetByLabelName(
+        string labelName,
+        [FromQuery] string? query = null,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        var userId = CurrentUserId();
+        if (userId == null) return Unauthorized();
+
+        if (pageNumber < 1)
+        {
+            return BadRequest(new { message = "Invalid page number. Page number must be 1 or greater." });
+        }
+
+        if (pageSize < 1)
+        {
+            return BadRequest(new { message = "Invalid page size. Page size must be 1 or greater." });
+        }
+
+        if (pageSize > 100)
+        {
+            return BadRequest(new { message = "Requested page size is unusually large. Maximum allowed page size is 100 notes per page." });
+        }
+
+        var filter = new NoteFilterParams
+        {
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            Label = labelName,
+            Query = query,
+            IsArchived = false,
+            IsTrashed = false
+        };
+
+        var result = await _notes.GetPagedAsync(userId.Value, filter, ct);
+        return Ok(result);
     }
 
     [HttpGet("{id:guid}")]

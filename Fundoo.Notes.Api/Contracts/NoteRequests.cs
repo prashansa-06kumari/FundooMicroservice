@@ -64,3 +64,17 @@ public class CreateCollaboratorStandaloneRequest
     [StringLength(255)]
     public string Email { get; set; } = "";
 }
+
+public class NoteQueryRequest
+{
+    public int? PageNumber { get; set; } = 1;
+    public int? PageSize { get; set; } = 10;
+    public string? Query { get; set; }
+    public string? Title { get; set; }
+    public string? Content { get; set; }
+    public string? Label { get; set; }
+    public Guid? LabelId { get; set; }
+    public string? Color { get; set; }
+    public bool? IsArchived { get; set; } = false;
+    public bool? IsTrashed { get; set; } = false;
+}

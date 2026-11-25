@@ -1,4 +1,5 @@
 using Fundoo.Notes.Application.Interfaces;
+using Fundoo.Notes.Domain.Common;
 using Fundoo.Notes.Domain.Entities;
 using Fundoo.Notes.Infrastructure.Data;
 using Npgsql;
@@ -124,6 +125,136 @@ public class NoteRepository : INoteRepository
             """;
 
         return await GetNotesAsync(sql, userId, ct);
+    }
+
+    public async Task<PagedResult<Note>> GetPagedAsync(
+        Guid userId,
+        NoteFilterParams filter,
+        CancellationToken ct)
+    {
+        var pageNumber = Math.Max(1, filter.PageNumber);
+        var pageSize = Math.Clamp(filter.PageSize, 1, 100);
+
+        var whereClauses = new List<string> { @"n.""UserId"" = @UserId" };
+        var parameters = new List<NpgsqlParameter>
+        {
+            new("UserId", userId)
+        };
+
+        if (filter.IsArchived.HasValue)
+        {
+            whereClauses.Add(@"n.""IsArchived"" = @IsArchived");
+            parameters.Add(new("IsArchived", filter.IsArchived.Value));
+        }
+
+        if (filter.IsTrashed.HasValue)
+        {
+            whereClauses.Add(@"n.""IsTrashed"" = @IsTrashed");
+            parameters.Add(new("IsTrashed", filter.IsTrashed.Value));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Color))
+        {
+            whereClauses.Add(@"LOWER(n.""Color"") = @Color");
+            parameters.Add(new("Color", filter.Color.Trim().ToLowerInvariant()));
+        }
+
+        // Full search across Title and Content
+        if (!string.IsNullOrWhiteSpace(filter.Query))
+        {
+            whereClauses.Add(@"(LOWER(n.""Title"") LIKE @Query OR LOWER(n.""Content"") LIKE @Query)");
+            parameters.Add(new("Query", $"%{filter.Query.Trim().ToLowerInvariant()}%"));
+        }
+
+        // Specific Title search
+        if (!string.IsNullOrWhiteSpace(filter.Title))
+        {
+            whereClauses.Add(@"LOWER(n.""Title"") LIKE @Title");
+            parameters.Add(new("Title", $"%{filter.Title.Trim().ToLowerInvariant()}%"));
+        }
+
+        // Specific Content search
+        if (!string.IsNullOrWhiteSpace(filter.Content))
+        {
+            whereClauses.Add(@"LOWER(n.""Content"") LIKE @Content");
+            parameters.Add(new("Content", $"%{filter.Content.Trim().ToLowerInvariant()}%"));
+        }
+
+        // Filter by Label Name
+        if (!string.IsNullOrWhiteSpace(filter.Label))
+        {
+            whereClauses.Add(@"EXISTS (
+                SELECT 1 FROM ""NoteLabels"" nl
+                INNER JOIN ""Labels"" l ON l.""Id"" = nl.""LabelId""
+                WHERE nl.""NoteId"" = n.""Id""
+                  AND LOWER(l.""Name"") = @LabelName
+            )");
+            parameters.Add(new("LabelName", filter.Label.Trim().ToLowerInvariant()));
+        }
+
+        // Filter by Label ID
+        if (filter.LabelId.HasValue)
+        {
+            whereClauses.Add(@"EXISTS (
+                SELECT 1 FROM ""NoteLabels"" nl
+                WHERE nl.""NoteId"" = n.""Id""
+                  AND nl.""LabelId"" = @LabelId
+            )");
+            parameters.Add(new("LabelId", filter.LabelId.Value));
+        }
+
+        var whereSql = string.Join(" AND ", whereClauses);
+
+        await using var connection = _connectionFactory.CreateConnection();
+        await connection.OpenAsync(ct);
+
+        // 1. Get Total Count
+        var countSql = $@"SELECT COUNT(*) FROM ""Notes"" n WHERE {whereSql};";
+        int totalCount;
+        await using (var countCmd = new NpgsqlCommand(countSql, connection))
+        {
+            foreach (var p in parameters) countCmd.Parameters.Add(p.Clone());
+            var countResult = await countCmd.ExecuteScalarAsync(ct);
+            totalCount = Convert.ToInt32(countResult);
+        }
+
+        if (totalCount == 0)
+        {
+            return PagedResult<Note>.Create(
+                Array.Empty<Note>(), 0, pageNumber, pageSize, "No notes found matching your criteria.");
+        }
+
+        // 2. Fetch Paged Notes
+        var offset = (pageNumber - 1) * pageSize;
+        var dataSql = $@"
+            SELECT n.*
+            FROM ""Notes"" n
+            WHERE {whereSql}
+            ORDER BY n.""IsPinned"" DESC, n.""UpdatedAtUtc"" DESC
+            LIMIT @Limit OFFSET @Offset;";
+
+        var notes = new List<Note>();
+        await using (var dataCmd = new NpgsqlCommand(dataSql, connection))
+        {
+            foreach (var p in parameters) dataCmd.Parameters.Add(p.Clone());
+            dataCmd.Parameters.Add(new("Limit", pageSize));
+            dataCmd.Parameters.Add(new("Offset", offset));
+
+            await using var reader = await dataCmd.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                notes.Add(ReadNote(reader));
+            }
+        }
+
+        if (notes.Count > 0)
+        {
+            await LoadLabelsAsync(connection, notes, ct);
+            await LoadCollaboratorsAsync(connection, notes, ct);
+        }
+
+        var message = notes.Count == 0 ? "No notes available on this page." : null;
+        return PagedResult<Note>.Create(notes, totalCount, pageNumber, pageSize, message);
     }
 
     public async Task<List<Note>> GetArchivedAsync(

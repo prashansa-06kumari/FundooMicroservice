@@ -46,3 +46,25 @@ CREATE TABLE IF NOT EXISTS "NoteLabels"
 
 CREATE INDEX IF NOT EXISTS "IX_NoteLabels_LabelId"
     ON "NoteLabels" ("LabelId");
+
+CREATE TABLE IF NOT EXISTS "Collaborators"
+(
+    "Id" UUID PRIMARY KEY,
+    "NoteId" UUID NOT NULL,
+    "CollaboratorEmail" VARCHAR(255) NOT NULL,
+    "CreatedAtUtc" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT "FK_Collaborators_Notes_NoteId"
+        FOREIGN KEY ("NoteId")
+        REFERENCES "Notes" ("Id")
+        ON DELETE CASCADE,
+
+    CONSTRAINT "UQ_Collaborators_NoteId_Email"
+        UNIQUE ("NoteId", "CollaboratorEmail")
+);
+
+CREATE INDEX IF NOT EXISTS "IX_Collaborators_NoteId"
+    ON "Collaborators" ("NoteId");
+
+CREATE INDEX IF NOT EXISTS "IX_Collaborators_Email"
+    ON "Collaborators" ("CollaboratorEmail");

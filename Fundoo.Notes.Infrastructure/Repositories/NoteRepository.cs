@@ -94,6 +94,7 @@ public class NoteRepository : INoteRepository
         if (note != null)
         {
             await LoadLabelsAsync(connection, new[] { note }, ct);
+            await LoadCollaboratorsAsync(connection, new[] { note }, ct);
         }
 
         return note;
@@ -173,6 +174,7 @@ public class NoteRepository : INoteRepository
         if (notes.Count > 0)
         {
             await LoadLabelsAsync(connection, notes, ct);
+            await LoadCollaboratorsAsync(connection, notes, ct);
         }
 
         return notes;
@@ -481,6 +483,48 @@ public class NoteRepository : INoteRepository
                     Name = reader.GetString(
                         reader.GetOrdinal("LabelName"))
                 }
+            });
+        }
+    }
+
+    private static async Task LoadCollaboratorsAsync(
+        NpgsqlConnection connection,
+        IReadOnlyCollection<Note> notes,
+        CancellationToken ct)
+    {
+        var noteIds = notes.Select(n => n.Id).ToArray();
+
+        const string sql = """
+            SELECT "Id", "NoteId", "CollaboratorEmail", "CreatedAtUtc"
+            FROM "Collaborators"
+            WHERE "NoteId" = ANY(@NoteIds)
+            ORDER BY "CreatedAtUtc" ASC;
+            """;
+
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        command.Parameters.AddWithValue(
+            "NoteIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid, noteIds);
+
+        var notesById = notes.ToDictionary(n => n.Id);
+
+        await using var reader = await command.ExecuteReaderAsync(ct);
+
+        while (await reader.ReadAsync(ct))
+        {
+            var noteId = reader.GetGuid(reader.GetOrdinal("NoteId"));
+
+            if (!notesById.TryGetValue(noteId, out var note))
+            {
+                continue;
+            }
+
+            note.Collaborators.Add(new Collaborator
+            {
+                Id = reader.GetGuid(reader.GetOrdinal("Id")),
+                NoteId = noteId,
+                CollaboratorEmail = reader.GetString(reader.GetOrdinal("CollaboratorEmail")),
+                CreatedAtUtc = reader.GetDateTime(reader.GetOrdinal("CreatedAtUtc"))
             });
         }
     }

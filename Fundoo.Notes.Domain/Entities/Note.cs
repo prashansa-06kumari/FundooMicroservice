@@ -14,4 +14,5 @@ public class Note
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public List<NoteLabel> NoteLabels { get; set; } = new();
+    public List<Collaborator> Collaborators { get; set; } = new();
 }

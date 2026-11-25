@@ -45,3 +45,22 @@ public class UpdateLabelRequest
     [StringLength(100)]
     public string Name { get; set; } = "";
 }
+
+public class AddCollaboratorRequest
+{
+    [Required]
+    [EmailAddress]
+    [StringLength(255)]
+    public string Email { get; set; } = "";
+}
+
+public class CreateCollaboratorStandaloneRequest
+{
+    [Required]
+    public Guid NoteId { get; set; }
+
+    [Required]
+    [EmailAddress]
+    [StringLength(255)]
+    public string Email { get; set; } = "";
+}

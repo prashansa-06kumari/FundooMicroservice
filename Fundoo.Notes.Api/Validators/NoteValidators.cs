@@ -46,3 +46,28 @@ public class CreateLabelRequestValidator : AbstractValidator<CreateLabelRequest>
             .MaximumLength(100).WithMessage("Label name cannot exceed 100 characters.");
     }
 }
+
+public class AddCollaboratorRequestValidator : AbstractValidator<AddCollaboratorRequest>
+{
+    public AddCollaboratorRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Collaborator email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(255).WithMessage("Email cannot exceed 255 characters.");
+    }
+}
+
+public class CreateCollaboratorStandaloneRequestValidator : AbstractValidator<CreateCollaboratorStandaloneRequest>
+{
+    public CreateCollaboratorStandaloneRequestValidator()
+    {
+        RuleFor(x => x.NoteId)
+            .NotEmpty().WithMessage("NoteId is required.");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Collaborator email is required.")
+            .EmailAddress().WithMessage("A valid email address is required.")
+            .MaximumLength(255).WithMessage("Email cannot exceed 255 characters.");
+    }
+}

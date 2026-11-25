@@ -140,13 +140,14 @@ public class CollaboratorsController : ControllerBase
     [HttpGet("api/collaborator/notes")]
     public async Task<IActionResult> GetCollaboratedNotes(CancellationToken ct)
     {
+        var userId = CurrentUserId();
         var userEmail = CurrentUserEmail();
-        if (string.IsNullOrWhiteSpace(userEmail))
+        if (userId == null || string.IsNullOrWhiteSpace(userEmail))
         {
-            return BadRequest(new { message = "User email not found in token claims. Ensure your JWT includes an 'email' claim." });
+            return BadRequest(new { message = "User identity or email not found in token." });
         }
 
-        var notes = await _collaboratorRepository.GetCollaboratedNotesAsync(userEmail, ct);
+        var notes = await _collaboratorRepository.GetCollaboratedNotesAsync(userId.Value, userEmail, ct);
         return Ok(notes);
     }
 }

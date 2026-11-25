@@ -183,6 +183,7 @@ public class CollaboratorRepository : ICollaboratorRepository
     }
 
     public async Task<List<Note>> GetCollaboratedNotesAsync(
+        Guid userId,
         string userEmail,
         CancellationToken ct)
     {
@@ -192,10 +193,10 @@ public class CollaboratorRepository : ICollaboratorRepository
         await connection.OpenAsync(ct);
 
         const string sql = """
-            SELECT n.*
+            SELECT DISTINCT n.*
             FROM "Notes" n
             INNER JOIN "Collaborators" c ON n."Id" = c."NoteId"
-            WHERE LOWER(c."CollaboratorEmail") = @UserEmail
+            WHERE (LOWER(c."CollaboratorEmail") = @UserEmail OR n."UserId" = @UserId)
               AND n."IsTrashed" = FALSE
             ORDER BY n."UpdatedAtUtc" DESC;
             """;
@@ -203,6 +204,7 @@ public class CollaboratorRepository : ICollaboratorRepository
         var notes = new List<Note>();
         await using (var command = new NpgsqlCommand(sql, connection))
         {
+            command.Parameters.AddWithValue("UserId", userId);
             command.Parameters.AddWithValue("UserEmail", userEmail);
 
             await using var reader = await command.ExecuteReaderAsync(ct);

@@ -1,4 +1,4 @@
-﻿using Fundoo.Notes.Application.Interfaces;
+using Fundoo.Notes.Application.Interfaces;
 using Fundoo.Notes.Domain.Entities;
 using Fundoo.Notes.Infrastructure.Data;
 using Npgsql;
@@ -67,8 +67,6 @@ public class NoteRepository : INoteRepository
         string? userEmail = null,
         CancellationToken ct = default)
     {
-        userEmail = userEmail?.Trim().ToLowerInvariant();
-
         const string sql = """
             SELECT n.*
             FROM "Notes" n
@@ -77,7 +75,8 @@ public class NoteRepository : INoteRepository
                   n."UserId" = @UserId
                   OR (@UserEmail IS NOT NULL AND EXISTS (
                       SELECT 1 FROM "Collaborators" c
-                      WHERE c."NoteId" = n."Id" AND LOWER(c."CollaboratorEmail") = @UserEmail
+                      WHERE c."NoteId" = n."Id"
+                        AND LOWER(c."CollaboratorEmail") = LOWER(@UserEmail)
                   ))
               );
             """;
@@ -93,7 +92,7 @@ public class NoteRepository : INoteRepository
         {
             command.Parameters.AddWithValue("Id", id);
             command.Parameters.AddWithValue("UserId", userId);
-            command.Parameters.AddWithValue("UserEmail", (object?)userEmail ?? DBNull.Value);
+            command.Parameters.AddWithValue("UserEmail", (object?)userEmail?.Trim().ToLowerInvariant() ?? DBNull.Value);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
 
@@ -113,25 +112,18 @@ public class NoteRepository : INoteRepository
 
     public async Task<List<Note>> GetAllAsync(
         Guid userId,
-        string? userEmail = null,
-        CancellationToken ct = default)
+        CancellationToken ct)
     {
-        userEmail = userEmail?.Trim().ToLowerInvariant();
-
         const string sql = """
-            SELECT DISTINCT n.*
-            FROM "Notes" n
-            LEFT JOIN "Collaborators" c ON c."NoteId" = n."Id"
-            WHERE (
-                n."UserId" = @UserId
-                OR (@UserEmail IS NOT NULL AND LOWER(c."CollaboratorEmail") = @UserEmail)
-            )
-              AND n."IsArchived" = FALSE
-              AND n."IsTrashed" = FALSE
-            ORDER BY n."IsPinned" DESC, n."UpdatedAtUtc" DESC;
+            SELECT *
+            FROM "Notes"
+            WHERE "UserId" = @UserId
+              AND "IsArchived" = FALSE
+              AND "IsTrashed" = FALSE
+            ORDER BY "IsPinned" DESC, "UpdatedAtUtc" DESC;
             """;
 
-        return await GetNotesAsync(sql, userId, userEmail, ct);
+        return await GetNotesAsync(sql, userId, ct);
     }
 
     public async Task<List<Note>> GetArchivedAsync(
@@ -147,7 +139,7 @@ public class NoteRepository : INoteRepository
             ORDER BY "UpdatedAtUtc" DESC;
             """;
 
-        return await GetNotesAsync(sql, userId, null, ct);
+        return await GetNotesAsync(sql, userId, ct);
     }
 
     public async Task<List<Note>> GetTrashAsync(
@@ -162,13 +154,12 @@ public class NoteRepository : INoteRepository
             ORDER BY "UpdatedAtUtc" DESC;
             """;
 
-        return await GetNotesAsync(sql, userId, null, ct);
+        return await GetNotesAsync(sql, userId, ct);
     }
 
     private async Task<List<Note>> GetNotesAsync(
         string sql,
         Guid userId,
-        string? userEmail,
         CancellationToken ct)
     {
         await using var connection =
@@ -181,7 +172,6 @@ public class NoteRepository : INoteRepository
         await using (var command = new NpgsqlCommand(sql, connection))
         {
             command.Parameters.AddWithValue("UserId", userId);
-            command.Parameters.AddWithValue("UserEmail", (object?)userEmail ?? DBNull.Value);
 
             await using var reader = await command.ExecuteReaderAsync(ct);
 
@@ -205,8 +195,6 @@ public class NoteRepository : INoteRepository
         string? userEmail = null,
         CancellationToken ct = default)
     {
-        userEmail = userEmail?.Trim().ToLowerInvariant();
-
         const string sql = """
             UPDATE "Notes" n
             SET "Title" = @Title,
@@ -219,7 +207,8 @@ public class NoteRepository : INoteRepository
                   n."UserId" = @UserId
                   OR (@UserEmail IS NOT NULL AND EXISTS (
                       SELECT 1 FROM "Collaborators" c
-                      WHERE c."NoteId" = n."Id" AND LOWER(c."CollaboratorEmail") = @UserEmail
+                      WHERE c."NoteId" = n."Id"
+                        AND LOWER(c."CollaboratorEmail") = LOWER(@UserEmail)
                   ))
               );
             """;
@@ -233,7 +222,7 @@ public class NoteRepository : INoteRepository
 
         command.Parameters.AddWithValue("Id", note.Id);
         command.Parameters.AddWithValue("UserId", note.UserId);
-        command.Parameters.AddWithValue("UserEmail", (object?)userEmail ?? DBNull.Value);
+        command.Parameters.AddWithValue("UserEmail", (object?)userEmail?.Trim().ToLowerInvariant() ?? DBNull.Value);
         command.Parameters.AddWithValue("Title", note.Title);
         command.Parameters.AddWithValue("Content", note.Content);
 

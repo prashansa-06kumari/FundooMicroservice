@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Fundoo.Notes.Api.Contracts;
 using Fundoo.Notes.Application.Interfaces;
 using Fundoo.Notes.Domain.Entities;
@@ -31,8 +31,7 @@ public class NotesController : ControllerBase
     private string? CurrentUserEmail()
     {
         return User.FindFirstValue(ClaimTypes.Email)
-            ?? User.FindFirstValue("email")
-            ?? User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress");
+            ?? User.FindFirstValue("email");
     }
 
     [HttpPost]
@@ -66,7 +65,7 @@ public class NotesController : ControllerBase
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
 
-        return Ok(await _notes.GetAllAsync(userId.Value, CurrentUserEmail(), ct));
+        return Ok(await _notes.GetAllAsync(userId.Value, ct));
     }
 
     [HttpGet("{id:guid}")]

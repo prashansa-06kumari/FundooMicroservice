@@ -24,19 +24,22 @@ public class UsersController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IKafkaProducer _kafkaProducer;
     private readonly IEmailService _emailService;
+    private readonly IHttpClientFactory _httpClientFactory;
 
     public UsersController(
         IUserRepository repository,
         IPasswordHasher<UserEntity> passwordHasher,
         IConfiguration configuration,
         IKafkaProducer kafkaProducer,
-        IEmailService emailService)
+        IEmailService emailService,
+        IHttpClientFactory httpClientFactory)
     {
         _repository = repository;
         _passwordHasher = passwordHasher;
         _configuration = configuration;
         _kafkaProducer = kafkaProducer;
         _emailService = emailService;
+        _httpClientFactory = httpClientFactory;
     }
 
     private Guid? CurrentUserId()
@@ -188,20 +191,84 @@ public class UsersController : ControllerBase
     public async Task<IActionResult> GoogleLogin(
         [FromBody] GoogleLoginRequest request)
     {
-        var email = request.Email.Trim().ToLowerInvariant();
+        string email;
+        string fullName;
+        string? googleId = request.GoogleId;
+
+        // If IdToken is provided, verify it directly with Google Cloud OAuth2 tokeninfo endpoint
+        if (!string.IsNullOrWhiteSpace(request.IdToken))
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            var googleVerifyUrl = $"https://oauth2.googleapis.com/tokeninfo?id_token={Uri.EscapeDataString(request.IdToken.Trim())}";
+
+            var response = await httpClient.GetAsync(googleVerifyUrl);
+            if (!response.IsSuccessStatusCode)
+            {
+                return Unauthorized(new
+                {
+                    message = "Google ID Token verification failed. The token is invalid or expired."
+                });
+            }
+
+            var jsonString = await response.Content.ReadAsStringAsync();
+            using var doc = JsonDocument.Parse(jsonString);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("email", out var emailProp) || string.IsNullOrWhiteSpace(emailProp.GetString()))
+            {
+                return Unauthorized(new { message = "Invalid Google token: email not found." });
+            }
+
+            email = emailProp.GetString()!.Trim().ToLowerInvariant();
+
+            // Verify Google Client ID if configured in appsettings.json
+            var configuredClientId = _configuration["Google:ClientId"];
+            if (!string.IsNullOrWhiteSpace(configuredClientId) &&
+                !configuredClientId.Contains("YOUR_GOOGLE_CLIENT_ID", StringComparison.OrdinalIgnoreCase))
+            {
+                if (root.TryGetProperty("aud", out var audProp) &&
+                    !string.Equals(audProp.GetString(), configuredClientId, StringComparison.Ordinal))
+                {
+                    return Unauthorized(new { message = "Google Token audience does not match configured Google Client ID." });
+                }
+            }
+
+            fullName = root.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? email.Split('@')[0] : email.Split('@')[0];
+            googleId = root.TryGetProperty("sub", out var subProp) ? subProp.GetString() : googleId;
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            // Direct profile payload (convenient for local Swagger testing)
+            email = request.Email.Trim().ToLowerInvariant();
+            fullName = string.IsNullOrWhiteSpace(request.FullName) ? email.Split('@')[0] : request.FullName.Trim();
+        }
+        else
+        {
+            return BadRequest(new
+            {
+                message = "Either 'idToken' (Google OAuth 2.0 Token) or 'email' must be provided."
+            });
+        }
+
         var user = await _repository.GetByEmailAsync(email);
 
         if (user == null)
         {
+            var nameParts = fullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries);
+            var firstName = nameParts.Length > 0 ? nameParts[0] : fullName;
+            var lastName = nameParts.Length > 1 ? nameParts[1] : "";
+
             // Auto-provision user for Google SSO
             user = new UserEntity
             {
                 Id = Guid.NewGuid(),
-                FullName = string.IsNullOrWhiteSpace(request.FullName) ? email.Split('@')[0] : request.FullName.Trim(),
+                FirstName = firstName,
+                LastName = lastName,
+                FullName = fullName,
                 Email = email,
                 AuthProvider = "Google",
-                ExternalProviderId = request.GoogleId,
-                PasswordHash = "OAUTH_EXTERNAL_LOGIN",
+                ExternalProviderId = googleId,
+                PasswordHash = "OAUTH_GOOGLE_ACCOUNT",
                 CreatedAt = DateTime.UtcNow
             };
             await _repository.CreateAsync(user);

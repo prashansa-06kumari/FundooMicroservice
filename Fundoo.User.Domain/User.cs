@@ -19,6 +19,8 @@ public class UserEntity
     // 2FA Fields
     public bool IsTwoFactorEnabled { get; set; } = false;
 
+    public string? TwoFactorSecret { get; set; }
+
     public string? TwoFactorCode { get; set; }
 
     public DateTime? TwoFactorExpiryUtc { get; set; }

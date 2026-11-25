@@ -164,6 +164,7 @@ try
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""AuthProvider"" text NOT NULL DEFAULT 'Local';
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""ExternalProviderId"" text NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IsTwoFactorEnabled"" boolean NOT NULL DEFAULT FALSE;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""TwoFactorSecret"" text NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""TwoFactorCode"" text NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""TwoFactorExpiryUtc"" timestamp with time zone NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""ResetPasswordToken"" text NULL;

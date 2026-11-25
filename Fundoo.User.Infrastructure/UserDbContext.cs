@@ -25,6 +25,8 @@ public class UserDbContext : DbContext
             entity.Property(u => u.FirstName).IsRequired(false);
             entity.Property(u => u.LastName).IsRequired(false);
             entity.Property(u => u.FullName).IsRequired(false);
+            entity.Property(u => u.TwoFactorSecret).IsRequired(false);
+            entity.Property(u => u.TwoFactorCode).IsRequired(false);
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.AuthProvider).HasDefaultValue("Local");
             entity.Property(u => u.IsTwoFactorEnabled).HasDefaultValue(false);

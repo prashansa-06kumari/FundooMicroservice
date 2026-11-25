@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Fundoo.User.Api.Models;
+using Fundoo.User.Api.Services;
 using Fundoo.User.Application;
 using Fundoo.User.Domain;
 using Microsoft.AspNetCore.Authorization;
@@ -140,38 +141,15 @@ public class UsersController : ControllerBase
             });
         }
 
-        // Check if 2FA is enabled
+        // Check if 2FA is enabled (Google Authenticator)
         if (user.IsTwoFactorEnabled)
         {
-            var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-            user.TwoFactorCode = code;
-            user.TwoFactorExpiryUtc = DateTime.UtcNow.AddMinutes(10);
-            await _repository.UpdateUserAsync(user);
-
-            // Send 2FA code via Kafka
-            var twoFactorEvent = JsonSerializer.Serialize(new
-            {
-                eventType = "TwoFactorRequested",
-                userId = user.Id,
-                email = user.Email,
-                fullName = user.FullName,
-                payload = code,
-                timestamp = DateTime.UtcNow
-            });
-            await _kafkaProducer.ProduceAsync("user-events", user.Id.ToString(), twoFactorEvent);
-
-            // Direct real email delivery
-            await _emailService.SendEmailAsync(
-                user.Email,
-                "Fundoo Notes - Two-Factor Authentication Login Code",
-                $"Hello {user.FullName},\n\nYour 2FA login verification code (OTP) is: {code}\nThis code will expire in 10 minutes.\n\nPlease enter this OTP in /api/v1/auth/login/2fa to complete your login.");
-
             return Ok(new
             {
                 requires2fa = true,
                 requiresTwoFactor = true,
                 email = user.Email,
-                message = "Two-factor verification code (OTP) has been sent to your email. Please verify using /api/v1/auth/login/2fa."
+                message = "Google Authenticator 2FA is required. Open your Google Authenticator app and enter the 6-digit code in /api/v1/auth/login/2fa."
             });
         }
 
@@ -188,20 +166,21 @@ public class UsersController : ControllerBase
 
         if (user == null || !user.IsTwoFactorEnabled)
         {
-            return Unauthorized(new { message = "Invalid request or 2FA not enabled for this user." });
+            return Unauthorized(new { message = "Invalid request or 2FA is not enabled for this user." });
         }
 
-        if (string.IsNullOrWhiteSpace(user.TwoFactorCode) ||
-            user.TwoFactorCode != request.Code.Trim() ||
-            user.TwoFactorExpiryUtc < DateTime.UtcNow)
+        var secret = user.TwoFactorSecret ?? user.TwoFactorCode;
+        if (string.IsNullOrWhiteSpace(secret))
         {
-            return Unauthorized(new { message = "Invalid or expired 2FA code." });
+            return Unauthorized(new { message = "Two-factor secret key is missing. Please set up 2FA again via /api/v1/auth/2fa/setup." });
         }
 
-        // Reset 2FA code after successful verification
-        user.TwoFactorCode = null;
-        user.TwoFactorExpiryUtc = null;
-        await _repository.UpdateUserAsync(user);
+        // Validate 6-digit code from Google Authenticator
+        bool isValid = TotpService.ValidateCode(secret, request.Code);
+        if (!isValid)
+        {
+            return Unauthorized(new { message = "Invalid 6-digit Google Authenticator code. Please check your app and try again." });
+        }
 
         return await GenerateAuthResponseAsync(user);
     }
@@ -255,21 +234,21 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "User not found. Provide email or authenticate with Bearer token." });
         }
 
-        var code = RandomNumberGenerator.GetInt32(100000, 999999).ToString();
-        user.TwoFactorCode = code;
-        user.TwoFactorExpiryUtc = DateTime.UtcNow.AddMinutes(10);
+        // Generate RFC 6238 Base32 secret key for Google Authenticator
+        var secret = TotpService.GenerateSecretKey(10);
+        user.TwoFactorSecret = secret;
+        user.TwoFactorCode = secret;
         await _repository.UpdateUserAsync(user);
 
-        // Send OTP via Email
-        await _emailService.SendEmailAsync(
-            user.Email,
-            "Fundoo Notes - Two-Factor Authentication Setup OTP",
-            $"Hello {user.FullName},\n\nYour OTP to set up Two-Factor Authentication is: {code}\nThis code is valid for 10 minutes.\n\nPlease enter this code in /api/v1/auth/2fa/enable to activate 2FA.");
+        var otpAuthUri = TotpService.GenerateOtpAuthUri(user.Email, secret, "FundooNotes");
+        var qrCodeUrl = TotpService.GenerateQrCodeUrl(otpAuthUri);
 
         return Ok(new
         {
-            message = "Two-factor setup OTP has been sent to your registered email.",
-            email = user.Email
+            manualEntryKey = secret,
+            qrCodeUrl,
+            otpauthUri = otpAuthUri,
+            message = "Open Google Authenticator on your phone. Tap '+' -> 'Scan a QR code' (open qrCodeUrl) OR 'Enter a setup key' (type manualEntryKey). Then verify using /api/v1/auth/2fa/enable with the 6-digit code showing in the app."
         });
     }
 
@@ -295,21 +274,25 @@ public class UsersController : ControllerBase
             return BadRequest(new { message = "User not found." });
         }
 
-        if (string.IsNullOrWhiteSpace(user.TwoFactorCode) ||
-            user.TwoFactorCode != request.Code.Trim() ||
-            user.TwoFactorExpiryUtc < DateTime.UtcNow)
+        var secret = user.TwoFactorSecret ?? user.TwoFactorCode;
+        if (string.IsNullOrWhiteSpace(secret))
         {
-            return BadRequest(new { message = "Invalid or expired 2FA verification code." });
+            return BadRequest(new { message = "2FA setup has not been initiated. Call /api/v1/auth/2fa/setup first." });
+        }
+
+        // Validate code from Google Authenticator
+        bool isValid = TotpService.ValidateCode(secret, request.Code);
+        if (!isValid)
+        {
+            return BadRequest(new { message = "Invalid 6-digit Google Authenticator code. Make sure your phone's clock is synchronized." });
         }
 
         user.IsTwoFactorEnabled = true;
-        user.TwoFactorCode = null;
-        user.TwoFactorExpiryUtc = null;
         await _repository.UpdateUserAsync(user);
 
         return Ok(new
         {
-            message = "Two-factor authentication has been enabled successfully!"
+            message = "Two-factor authentication with Google Authenticator has been enabled successfully!"
         });
     }
 
@@ -336,8 +319,8 @@ public class UsersController : ControllerBase
         }
 
         user.IsTwoFactorEnabled = false;
+        user.TwoFactorSecret = null;
         user.TwoFactorCode = null;
-        user.TwoFactorExpiryUtc = null;
         await _repository.UpdateUserAsync(user);
 
         return Ok(new

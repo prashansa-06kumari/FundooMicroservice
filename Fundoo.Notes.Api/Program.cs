@@ -74,11 +74,8 @@ builder.Services.AddScoped<ICollaboratorRepository, CollaboratorRepository>();
 var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key is missing.");
 
-var issuer = builder.Configuration["Jwt:Issuer"]
-    ?? throw new InvalidOperationException("Jwt:Issuer is missing.");
-
-var audience = builder.Configuration["Jwt:Audience"]
-    ?? throw new InvalidOperationException("Jwt:Audience is missing.");
+var issuer = builder.Configuration["Jwt:Issuer"] ?? "FundooUserApi";
+var audience = builder.Configuration["Jwt:Audience"] ?? "FundooClient";
 
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
@@ -98,14 +95,21 @@ builder.Services
                 var authHeader = context.Request.Headers.Authorization.ToString();
                 if (!string.IsNullOrEmpty(authHeader))
                 {
-                    if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    var token = authHeader.Trim();
+
+                    while (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                     {
-                        context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                        token = token.Substring("Bearer ".Length).Trim();
                     }
-                    else
+
+                    token = token.Trim('"', '\'', ' ');
+
+                    if (token.Contains("\","))
                     {
-                        context.Token = authHeader.Trim();
+                        token = token.Substring(0, token.IndexOf("\",")).Trim('"', ' ');
                     }
+
+                    context.Token = token;
                 }
                 return Task.CompletedTask;
             }
@@ -115,17 +119,17 @@ builder.Services
             new TokenValidationParameters
             {
                 ValidateIssuer = true,
-                ValidIssuer = issuer,
+                ValidIssuers = new[] { issuer, "FundooUserApi" },
 
-                ValidateAudience = true,
-                ValidAudience = audience,
+                // Disable strict audience matching across microservices to accept valid Fundoo tokens
+                ValidateAudience = false,
 
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(
                     Encoding.UTF8.GetBytes(jwtKey)),
 
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.FromMinutes(1)
+                ClockSkew = TimeSpan.FromMinutes(2)
             };
     });
 

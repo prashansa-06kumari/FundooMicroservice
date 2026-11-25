@@ -77,7 +77,7 @@ public class NotesController : ControllerBase
         if (userId == null) return Unauthorized();
 
         // Expectation 7: Validate navigation and batch size values
-        if (queryParams?.PageNumber.HasValue && queryParams.PageNumber.Value < 1)
+        if (queryParams != null && queryParams.PageNumber.HasValue && queryParams.PageNumber.Value < 1)
         {
             return BadRequest(new
             {
@@ -85,7 +85,7 @@ public class NotesController : ControllerBase
             });
         }
 
-        if (queryParams?.PageSize.HasValue && queryParams.PageSize.Value < 1)
+        if (queryParams != null && queryParams.PageSize.HasValue && queryParams.PageSize.Value < 1)
         {
             return BadRequest(new
             {
@@ -93,7 +93,7 @@ public class NotesController : ControllerBase
             });
         }
 
-        if (queryParams?.PageSize.HasValue && queryParams.PageSize.Value > 100)
+        if (queryParams != null && queryParams.PageSize.HasValue && queryParams.PageSize.Value > 100)
         {
             return BadRequest(new
             {

@@ -149,6 +149,9 @@ try
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
     await db.Database.ExecuteSqlRawAsync(@"
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""FirstName"" text NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""LastName"" text NULL;
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""FullName"" text NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""AuthProvider"" text NOT NULL DEFAULT 'Local';
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""ExternalProviderId"" text NULL;
         ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""IsTwoFactorEnabled"" boolean NOT NULL DEFAULT FALSE;

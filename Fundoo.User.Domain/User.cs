@@ -1,8 +1,12 @@
-﻿namespace Fundoo.User.Domain;
+namespace Fundoo.User.Domain;
 
 public class UserEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+
+    public string FirstName { get; set; } = string.Empty;
+
+    public string LastName { get; set; } = string.Empty;
 
     public string FullName { get; set; } = string.Empty;
 

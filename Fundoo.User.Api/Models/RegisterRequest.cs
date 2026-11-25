@@ -1,4 +1,3 @@
-﻿
 using System.ComponentModel.DataAnnotations;
 
 namespace Fundoo.User.Api.Models;
@@ -6,7 +5,12 @@ namespace Fundoo.User.Api.Models;
 public class RegisterRequest
 {
     [Required]
-    public string FullName { get; set; } = string.Empty;
+    [MaxLength(100)]
+    public string FirstName { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string LastName { get; set; } = string.Empty;
 
     [Required]
     [EmailAddress]

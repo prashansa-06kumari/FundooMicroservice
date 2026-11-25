@@ -50,3 +50,7 @@
 2026-11-25 10:04:39.2577 Info Registered target NLog.Targets.ConsoleTarget(Name=lifetimeConsole)
 2026-11-25 10:04:39.2663 Info NLog, Version=6.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c. File version: 6.2.1.5860. Product version: 6.2.1+b058028290f245d12c30cb2910c2a574558ed9c6. GlobalAssemblyCache: False
 2026-11-25 10:04:39.2865 Info Configuration initialized: TargetNames=allfile, lifetimeConsole, ConfigItems=34, AutoReload=true, FilePath=C:\Users\LEGION\source\repos\Solution2\Fundoo.User.Api\nlog.config
+2026-11-25 12:01:32.1571 Info Registered target NLog.Targets.FileTarget(Name=allfile)
+2026-11-25 12:01:32.1762 Info Registered target NLog.Targets.ConsoleTarget(Name=lifetimeConsole)
+2026-11-25 12:01:32.1904 Info NLog, Version=6.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c. File version: 6.2.1.5860. Product version: 6.2.1+b058028290f245d12c30cb2910c2a574558ed9c6. GlobalAssemblyCache: False
+2026-11-25 12:01:32.2198 Info Configuration initialized: TargetNames=allfile, lifetimeConsole, ConfigItems=34, AutoReload=true, FilePath=C:\Users\LEGION\source\repos\Solution2\Fundoo.User.Api\nlog.config

@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -69,10 +69,16 @@ public class UsersController : ControllerBase
             });
         }
 
+        var firstName = request.FirstName.Trim();
+        var lastName = request.LastName.Trim();
+        var fullName = $"{firstName} {lastName}".Trim();
+
         var user = new UserEntity
         {
             Id = Guid.NewGuid(),
-            FullName = request.FullName.Trim(),
+            FirstName = firstName,
+            LastName = lastName,
+            FullName = fullName,
             Email = email,
             CreatedAt = DateTime.UtcNow
         };
@@ -88,6 +94,8 @@ public class UsersController : ControllerBase
             eventType = "UserRegistered",
             userId = user.Id,
             email = user.Email,
+            firstName = user.FirstName,
+            lastName = user.LastName,
             fullName = user.FullName,
             timestamp = DateTime.UtcNow
         });
@@ -97,7 +105,8 @@ public class UsersController : ControllerBase
         {
             message = "User registered successfully!",
             user.Id,
-            user.FullName,
+            user.FirstName,
+            user.LastName,
             user.Email
         });
     }

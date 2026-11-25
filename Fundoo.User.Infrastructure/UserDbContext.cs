@@ -22,7 +22,9 @@ public class UserDbContext : DbContext
         {
             entity.HasKey(u => u.Id);
             entity.Property(u => u.Email).IsRequired();
-            entity.Property(u => u.FullName).IsRequired();
+            entity.Property(u => u.FirstName).IsRequired(false);
+            entity.Property(u => u.LastName).IsRequired(false);
+            entity.Property(u => u.FullName).IsRequired(false);
             entity.Property(u => u.PasswordHash).IsRequired();
             entity.Property(u => u.AuthProvider).HasDefaultValue("Local");
             entity.Property(u => u.IsTwoFactorEnabled).HasDefaultValue(false);

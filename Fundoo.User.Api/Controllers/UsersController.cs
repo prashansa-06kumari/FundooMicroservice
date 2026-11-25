@@ -157,7 +157,6 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost("login/2fa")]
-    [HttpPost("verify-2fa")]
     public async Task<IActionResult> TwoFactorLogin(
         [FromBody] TwoFactorLoginRequest request)
     {
@@ -186,7 +185,6 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost("google")]
-    [HttpPost("google-login")]
     public async Task<IActionResult> GoogleLogin(
         [FromBody] GoogleLoginRequest request)
     {

@@ -215,6 +215,16 @@ app.Use(async (context, next) =>
         context.Request.Path = "/api/v1/auth" + path.Substring("/api/users".Length);
     }
 
+    // Fallback rewrites for legacy routes
+    if (context.Request.Path.Equals("/api/v1/auth/verify-2fa", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = "/api/v1/auth/login/2fa";
+    }
+    else if (context.Request.Path.Equals("/api/v1/auth/google-login", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Request.Path = "/api/v1/auth/google";
+    }
+
     await next();
 });
 

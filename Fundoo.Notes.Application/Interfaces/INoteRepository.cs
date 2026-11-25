@@ -5,11 +5,11 @@ namespace Fundoo.Notes.Application.Interfaces;
 public interface INoteRepository
 {
     Task<Note> CreateAsync(Note note, CancellationToken ct);
-    Task<Note?> GetByIdAsync(Guid id, Guid userId, CancellationToken ct);
-    Task<List<Note>> GetAllAsync(Guid userId, CancellationToken ct);
+    Task<Note?> GetByIdAsync(Guid id, Guid userId, string? userEmail = null, CancellationToken ct = default);
+    Task<List<Note>> GetAllAsync(Guid userId, string? userEmail = null, CancellationToken ct = default);
     Task<List<Note>> GetArchivedAsync(Guid userId, CancellationToken ct);
     Task<List<Note>> GetTrashAsync(Guid userId, CancellationToken ct);
-    Task<bool> UpdateAsync(Note note, CancellationToken ct);
+    Task<bool> UpdateAsync(Note note, string? userEmail = null, CancellationToken ct = default);
     Task<bool> DeleteAsync(Guid id, Guid userId, CancellationToken ct);
     Task<bool> SetArchivedAsync(Guid id, Guid userId, bool archived, CancellationToken ct);
     Task<bool> SetTrashedAsync(Guid id, Guid userId, bool trashed, CancellationToken ct);

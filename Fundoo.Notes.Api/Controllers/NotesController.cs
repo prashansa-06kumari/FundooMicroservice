@@ -28,6 +28,13 @@ public class NotesController : ControllerBase
         return Guid.TryParse(value, out var id) ? id : null;
     }
 
+    private string? CurrentUserEmail()
+    {
+        return User.FindFirstValue(ClaimTypes.Email)
+            ?? User.FindFirstValue("email")
+            ?? User.FindFirstValue("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress");
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create(
         [FromBody] CreateNoteRequest request,
@@ -59,7 +66,7 @@ public class NotesController : ControllerBase
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
 
-        return Ok(await _notes.GetAllAsync(userId.Value, ct));
+        return Ok(await _notes.GetAllAsync(userId.Value, CurrentUserEmail(), ct));
     }
 
     [HttpGet("{id:guid}")]
@@ -70,7 +77,7 @@ public class NotesController : ControllerBase
         var userId = CurrentUserId();
         if (userId == null) return Unauthorized();
 
-        var note = await _notes.GetByIdAsync(id, userId.Value, ct);
+        var note = await _notes.GetByIdAsync(id, userId.Value, CurrentUserEmail(), ct);
 
         return note == null ? NotFound() : Ok(note);
     }
@@ -94,7 +101,7 @@ public class NotesController : ControllerBase
             IsPinned = request.IsPinned
         };
 
-        return await _notes.UpdateAsync(note, ct)
+        return await _notes.UpdateAsync(note, CurrentUserEmail(), ct)
             ? NoContent()
             : NotFound();
     }

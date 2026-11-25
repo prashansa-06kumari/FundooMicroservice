@@ -110,7 +110,7 @@ public class CollaboratorsController : ControllerBase
         var resolvedNoteId = noteId ?? Guid.Empty;
 
         var removed = await _collaboratorRepository.RemoveCollaboratorAsync(
-            resolvedNoteId, collaboratorId, userId.Value, ct);
+            resolvedNoteId, collaboratorId, userId.Value, CurrentUserEmail(), ct);
 
         return removed ? NoContent() : NotFound(new { message = "Collaborator not found or you are not authorized to remove them." });
     }
@@ -128,7 +128,7 @@ public class CollaboratorsController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var removed = await _collaboratorRepository.RemoveCollaboratorByEmailAsync(
-            noteId, email, userId.Value, ct);
+            noteId, email, userId.Value, CurrentUserEmail(), ct);
 
         return removed ? NoContent() : NotFound(new { message = "Collaborator not found or you are not authorized to remove them." });
     }

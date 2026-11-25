@@ -82,7 +82,8 @@ public class CollaboratorRepository : ICollaboratorRepository
         Guid noteId,
         Guid collaboratorId,
         Guid userId,
-        CancellationToken ct)
+        string? userEmail = null,
+        CancellationToken ct = default)
     {
         await using var connection = _connectionFactory.CreateConnection();
         await connection.OpenAsync(ct);
@@ -93,13 +94,14 @@ public class CollaboratorRepository : ICollaboratorRepository
             WHERE c."NoteId" = n."Id"
               AND c."Id" = @CollaboratorId
               AND (@NoteId = '00000000-0000-0000-0000-000000000000'::uuid OR c."NoteId" = @NoteId)
-              AND n."UserId" = @UserId;
+              AND (n."UserId" = @UserId OR LOWER(c."CollaboratorEmail") = LOWER(@UserEmail));
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("CollaboratorId", collaboratorId);
         command.Parameters.AddWithValue("NoteId", noteId);
         command.Parameters.AddWithValue("UserId", userId);
+        command.Parameters.AddWithValue("UserEmail", (object?)userEmail?.Trim().ToLowerInvariant() ?? DBNull.Value);
 
         var rows = await command.ExecuteNonQueryAsync(ct);
         return rows > 0;
@@ -109,7 +111,8 @@ public class CollaboratorRepository : ICollaboratorRepository
         Guid noteId,
         string email,
         Guid userId,
-        CancellationToken ct)
+        string? userEmail = null,
+        CancellationToken ct = default)
     {
         email = email.Trim().ToLowerInvariant();
 
@@ -122,13 +125,14 @@ public class CollaboratorRepository : ICollaboratorRepository
             WHERE c."NoteId" = n."Id"
               AND LOWER(c."CollaboratorEmail") = @CollaboratorEmail
               AND c."NoteId" = @NoteId
-              AND n."UserId" = @UserId;
+              AND (n."UserId" = @UserId OR LOWER(c."CollaboratorEmail") = LOWER(@UserEmail));
             """;
 
         await using var command = new NpgsqlCommand(sql, connection);
         command.Parameters.AddWithValue("CollaboratorEmail", email);
         command.Parameters.AddWithValue("NoteId", noteId);
         command.Parameters.AddWithValue("UserId", userId);
+        command.Parameters.AddWithValue("UserEmail", (object?)userEmail?.Trim().ToLowerInvariant() ?? DBNull.Value);
 
         var rows = await command.ExecuteNonQueryAsync(ct);
         return rows > 0;

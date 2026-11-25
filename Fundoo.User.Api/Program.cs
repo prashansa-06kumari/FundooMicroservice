@@ -107,15 +107,24 @@ builder.Services
                 var authHeader = context.Request.Headers.Authorization.ToString();
                 if (!string.IsNullOrEmpty(authHeader))
                 {
-                    if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    var token = authHeader.Trim();
+
+                    // Remove any repeated "Bearer " prefixes
+                    while (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
                     {
-                        context.Token = authHeader.Substring("Bearer ".Length).Trim();
+                        token = token.Substring("Bearer ".Length).Trim();
                     }
-                    else
+
+                    // Clean quotes if copied from JSON
+                    token = token.Trim('"', '\'', ' ');
+
+                    // If user accidentally pasted `accessToken", "refreshToken": "..."`
+                    if (token.Contains("\","))
                     {
-                        // Auto-support raw JWT token if "Bearer " prefix was omitted
-                        context.Token = authHeader.Trim();
+                        token = token.Substring(0, token.IndexOf("\",")).Trim('"', ' ');
                     }
+
+                    context.Token = token;
                 }
                 return Task.CompletedTask;
             }
